@@ -5,9 +5,9 @@
 ## X-Curse-Repository-ID: wow/diminishingreturns/mainline
 
 ## Title: Diminishing Returns
-## Notes: |@Version: 1@|Attach diminishing return icons to unit frames.
-## Notes-zhCN: |@Version: 1@|在单位框体附着递减规则图标。
-## Notes-zhTW: |@Version: 1@|在單位框體附著遞減規則圖示。
+## Notes: |@Version: 2@|Attach diminishing return icons to unit frames.
+## Notes-zhCN: |@Version: 2@|在单位框体附着递减规则图标。
+## Notes-zhTW: |@Version: 2@|在單位框體附著遞減規則圖示。
 ## Author: Adirelle
 ## Version: v1.0-beta-12
 ## X-Date: 2010-07-06T12:10:41Z
