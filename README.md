@@ -1,10 +1,5 @@
-# DiminishingReturns for Sirus (3.3.5)
+Аддон Diminishing returns будет отслеживать диминишинг ваших противников (фир, циклон, овца, корни и т.д.). Для того чтобы вы смогли во время сориентироваться и дать максимальный контроль своему врагу.
+Данный мод работает с большинством популярных аддонов (Shadowed Unit Frames, Gladius, X-Perl, PitBull Unit Frames и ElvUI).
 
-#### Advanced settings
-* adding spells from custom faction/race
-
-#### Install
-##### copy folders into Interface/Addons
-
-###### support me
+###### Поддержать автора аддона
 * https://streamlabs.com/qbjw/tip
