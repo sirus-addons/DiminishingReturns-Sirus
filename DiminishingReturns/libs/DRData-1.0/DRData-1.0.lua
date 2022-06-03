@@ -141,6 +141,9 @@ Data.spells = {
 	
 	-- Repentance
 	[20066] = "disorient",
+	
+	-- panda
+	[316443] = "disorient",
 		
 	--[[ SILENCES ]]--
 	-- Nether Shock
@@ -151,13 +154,19 @@ Data.spells = {
 	[1330] = "silence",
 	
 	-- Arcane Torrent (Energy version)
-	[25046] = "silence",
+	[316418] = "silence",
 	
 	-- Arcane Torrent (Mana version)
-	[28730] = "silence",
+	[316421] = "silence",
 	
 	-- Arcane Torrent (Runic power version)
-	[50613] = "silence",
+	[302387] = "silence",
+	
+	-- Arcane Torrent
+	[316419] = "silence",
+	
+	-- Arcane Torrent
+	[316420] = "silence",
 	
 	-- Silence
 	[15487] = "silence",
@@ -241,10 +250,14 @@ Data.spells = {
 
 	--[[ CONTROL STUNS ]]--
 	-- Intercept (Felguard)
+	[25274] = "ctrlstun",
 	[30153] = "ctrlstun",
 	[30195] = "ctrlstun",
 	[30197] = "ctrlstun",
 	[47995] = "ctrlstun",
+	
+	-- Wolf stuns (shaman pets)
+	[58861] = "ctrlstun",
 	
 	-- Ravage
 	[50518] = "ctrlstun",
@@ -294,10 +307,10 @@ Data.spells = {
 	[316161] = "ctrlstun",
 	
 	-- Vulpera Stun
-	[308726] = "ctrlstun",
+	[316455] = "ctrlstun",
 
 	-- War Stomp
-	[20549] = "ctrlstun",
+	[316386] = "ctrlstun",
 
 	-- Intercept
 	[20252] = "ctrlstun",

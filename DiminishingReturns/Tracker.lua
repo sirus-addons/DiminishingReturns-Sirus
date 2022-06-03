@@ -41,6 +41,7 @@ do
 		scatters = 19503, -- Scatter Shot
 		silence =  2139, -- Counterspell
 		sleep = 2637, -- Hibernate	
+		dragonbreath = 31661, -- Dragon`s Breath
 	}
 	-- Update with class specific icons
 	local _, pClass = UnitClass('player')

@@ -80,7 +80,7 @@ local function SpawnIcon(self)
 		cooldown.noCooldownCount = true
 		icon.cooldown = cooldown
 		
-		textFrame:SetFrameLevel(cooldown:GetFrameLevel()+2)
+		textFrame:SetFrameLevel(cooldown:GetFrameLevel()+3)
 	end
 	
 	local bigText = textFrame:CreateFontString(nil, "OVERLAY")
