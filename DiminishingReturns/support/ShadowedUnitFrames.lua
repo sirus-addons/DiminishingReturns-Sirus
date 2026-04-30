@@ -1,51 +1,55 @@
-local addon = DiminishingReturns
+--[[
+Diminishing Returns - Attach diminishing return icons to unit frames.
+Copyright 2009-2012 Adirelle (adirelle@gmail.com)
+All rights reserved.
+--]]
+
+local addon = _G.DiminishingReturns
 if not addon then return end
 
-local	db
-	
 addon:RegisterAddonSupport('ShadowedUnitFrames', function()
+	--<GLOBALS
+	local _G = _G
+	local format = _G.format
+	local GetAddOnMetadata = _G.GetAddOnMetadata
+	local strmatch = _G.strmatch
+	local tonumber = _G.tonumber
+	--GLOBALS>
 
-	local defaults = {
-		enabled = true,
-		iconSize = 24,
-		direction = 'RIGHT',
-		spacing = 2,
-		anchorPoint = 'TOPLEFT',
-		relPoint = 'BOTTOMLEFT',
-		xOffset = 0,
-		yOffset = -4,
-	}
+	local state, version = 'unknown', GetAddOnMetadata('ShadowedUnitFrames', 'Version')
+	local major = tonumber(strmatch(version, '^v?(%d+%.?%d*)'))
+	if major then
+		if major >= 2 then
+			state = 'supported'
+		else
+			return 'unsupported', version
+		end
+	end
 
-	db = addon.db:RegisterNamespace('ShadowedUnitFrames', {profile={
-		target = defaults,
-		focus = defaults,
-		player = defaults,
-		arena = defaults, -- should find better one
+	local db = addon.db:RegisterNamespace('ShadowedUnitFrames', {profile={
+		['*'] = {
+			enabled = true,
+			iconSize = 16,
+			direction = 'RIGHT',
+			spacing = 2,
+			anchorPoint = 'TOPLEFT',
+			relPoint = 'TOPRIGHT',
+			xOffset = 4,
+			yOffset = -4,
+		}
 	}})
 
-	local function RegisterFrame(unit)
-		local function GetDatabase() return db.profile[unit], db end
-		addon:RegisterFrameConfig('SUF: '..addon.L[unit], GetDatabase)
-		addon:RegisterFrame('SUFUnit'..unit, function(frame)
+	addon:RegisterCommonFrames(function(unit)
+		local refUnit, index = strmatch(unit, "^(%w-)(%d*)$")
+		local name = index ~= "" and format("SUFHeader%sUnitButton%s", refUnit, index) or format("SUFUnit%s", refUnit)
+		local function GetDatabase() return db.profile[refUnit], db end
+		addon:RegisterFrameConfig('SUF: '..addon.L[refUnit], GetDatabase)
+		addon:RegisterFrame(name, function(frame)
 			return addon:SpawnFrame(frame, frame, GetDatabase)
 		end)
-	end
+	end)
 
-	RegisterFrame('target')
-	RegisterFrame('focus')
-	RegisterFrame('player')
-	
+	return state, version
 end)
 
--- ShadowedUF_Arena depends on SUF so it is loaded after and db would be initialized at that time
-addon:RegisterAddonSupport('ShadowedUF_Arena', function()
-	local function GetDatabase() return db.profile.arena, db end
-	local function SetupFrame(frame)
-		return addon:SpawnFrame(frame, frame, GetDatabase)
-	end
-	addon:RegisterFrameConfig('SUF: '..addon.L["Arena"], GetDatabase)
-	for index = 1, 5 do
-		addon:RegisterFrame('SUFHeaderarenaUnitButton'..index, SetupFrame)
-	end
-end)
-	
+

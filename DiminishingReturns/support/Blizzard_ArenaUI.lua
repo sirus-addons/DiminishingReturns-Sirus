@@ -1,7 +1,17 @@
-local addon = DiminishingReturns
+--[[
+Diminishing Returns - Attach diminishing return icons to unit frames.
+Copyright 2009-2012 Adirelle (adirelle@gmail.com)
+All rights reserved.
+--]]
+
+local addon = _G.DiminishingReturns
 if not addon then return end
 
 addon:RegisterAddonSupport('Blizzard_ArenaUI', function()
+	--<GLOBALS
+	local _G = _G
+	local GetBuildInfo = _G.GetBuildInfo
+	--GLOBALS>
 
 	local db = addon.db:RegisterNamespace('Blizzard_ArenaUI', {profile={
 		enabled = true,
@@ -14,7 +24,7 @@ addon:RegisterAddonSupport('Blizzard_ArenaUI', function()
 		yOffset = -2,
 	}})
 
-	local function GetDatabase() 
+	local function GetDatabase()
 		return db.profile, db
 	end
 
@@ -27,6 +37,7 @@ addon:RegisterAddonSupport('Blizzard_ArenaUI', function()
 	for i = 1,5 do
 		addon:RegisterFrame('ArenaEnemyFrame'..i, SetupFrame)
 	end
-	
+
+	return 'supported', GetBuildInfo()
 end)
 

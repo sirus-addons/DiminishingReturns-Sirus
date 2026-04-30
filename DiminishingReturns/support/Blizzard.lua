@@ -1,95 +1,59 @@
-local addon = DiminishingReturns
+--[[
+Diminishing Returns - Attach diminishing return icons to unit frames.
+Copyright 2009-2012 Adirelle (adirelle@gmail.com)
+All rights reserved.
+--]]
+
+local addon = _G.DiminishingReturns
 if not addon then return end
 
 -- FrameXML is a internal fake to have this working like other support
 addon:RegisterAddonSupport('FrameXML', function()
-	
-	local db = addon.db:RegisterNamespace('Blizzard', {profile={
-		target = {
-			enabled = false,
-			iconSize = 16,
-			direction = 'BOTTOM',
-			spacing = 2,
-			anchorPoint = 'TOPLEFT',
-			relPoint = 'TOPRIGHT',
-			xOffset = -25,
-			yOffset = -20,
-		},
-		focus = {
-			enabled = false,
-			iconSize = 16,
-			direction = 'RIGHT',
-			spacing = 2,
-			anchorPoint = 'TOPLEFT',
-			relPoint = 'BOTTOMLEFT',
-			xOffset = 14,
-			yOffset = 28,
-		},
-		player = {
-			enabled = false,
-			iconSize = 16,
-			direction = 'BOTTOM',
-			spacing = 2,
-			anchorPoint = 'TOPLEFT',
-			relPoint = 'TOPRIGHT',
-			xOffset = -25,
-			yOffset = -20,
-		},
-		party1 = {
-			enabled = false,
-			iconSize = 16,
-			direction = 'RIGHT',
-			spacing = 2,
-			anchorPoint = 'RIGHT',
-			relPoint = 'LEFT',
-			xOffset = 0,
-			yOffset = 0,
-		},
-		party2 = {
-			enabled = false,
-			iconSize = 16,
-			direction = 'RIGHT',
-			spacing = 2,
-			anchorPoint = 'RIGHT',
-			relPoint = 'LEFT',
-			xOffset = 0,
-			yOffset = 0,
-		},
-		party3 = {
-			enabled = false,
-			iconSize = 16,
-			direction = 'RIGHT',
-			spacing = 2,
-			anchorPoint = 'RIGHT',
-			relPoint = 'LEFT',
-			xOffset = 0,
-			yOffset = 0,
-		},
-		party4 = {
-			enabled = false,
-			iconSize = 16,
-			direction = 'RIGHT',
-			spacing = 2,
-			anchorPoint = 'RIGHT',
-			relPoint = 'LEFT',
-			xOffset = 0,
-			yOffset = 0,
-		},
-		party5 = {
-			enabled = false,
-			iconSize = 16,
-			direction = 'RIGHT',
-			spacing = 2,
-			anchorPoint = 'RIGHT',
-			relPoint = 'LEFT',
-			xOffset = 0,
-			yOffset = 0,
+	--<GLOBALS
+	local _G = _G
+	local GetBuildInfo = _G.GetBuildInfo
+	local gsub = _G.gsub
+	--GLOBALS>
+
+	local defaults = {
+		profile = {
+			['**'] = {
+				enabled = true,
+				iconSize = 16,
+				spacing = 2,
+			},
+			player = {
+				direction = 'RIGHT',
+				anchorPoint = 'BOTTOMLEFT',
+				relPoint = 'TOPLEFT',
+				xOffset = 110,
+				yOffset = -20,
+			},
+			target = {
+				direction = 'RIGHT',
+				anchorPoint = 'BOTTOMLEFT',
+				relPoint = 'TOPLEFT',
+				xOffset = 8,
+				yOffset = -20,
+			},
+			party = {
+				direction = 'RIGHT',
+				anchorPoint = 'TOPLEFT',
+				relPoint = 'TOPRIGHT',
+				xOffset = -8,
+				yOffset = -28,
+			}
 		}
-	}})
-	
+	}
+	defaults.profile.focus = defaults.profile.target
+	defaults.profile.party = defaults.profile.target
+
+	local db = addon.db:RegisterNamespace('Blizzard', defaults)
+
 	local function RegisterFrame(name, unit)
-		local function GetDatabase() return db.profile[unit], db end
-		addon:RegisterFrameConfig('Blizzard: '..addon.L[unit], GetDatabase)
+		local refUnit = gsub(unit, "%d+$", "")
+		local function GetDatabase() return db.profile[refUnit], db end
+		addon:RegisterFrameConfig('Blizzard: '..addon.L[refUnit], GetDatabase)
 		addon:RegisterFrame(name, function(frame)
 			return addon:SpawnFrame(frame, frame, GetDatabase)
 		end)
@@ -98,8 +62,11 @@ addon:RegisterAddonSupport('FrameXML', function()
 	RegisterFrame('TargetFrame', 'target')
 	RegisterFrame('FocusFrame', 'focus')
 	RegisterFrame('PlayerFrame', 'player')
-	for i = 1,5 do
+	RegisterFrame('FocusFrame', 'focus')
+	for i = 1, 4 do
 		RegisterFrame('PartyMemberFrame'..i, 'party'..i)
 	end
+
+	return 'supported', GetBuildInfo()
 end)
 

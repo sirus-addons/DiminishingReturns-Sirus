@@ -1,9 +1,50 @@
-local addon = DiminishingReturns
+--[[
+Diminishing Returns - Attach diminishing return icons to unit frames.
+Copyright 2009-2012 Adirelle (adirelle@gmail.com)
+All rights reserved.
+--]]
+
+local addon = _G.DiminishingReturns
 if not addon then return end
+
+--<GLOBALS
+local _G = _G
+local assert = _G.assert
+local band = _G.bit.band
+local bor = _G.bit.bor
+local COMBATLOG_OBJECT_AFFILIATION_MINE = _G.COMBATLOG_OBJECT_AFFILIATION_MINE
+local COMBATLOG_OBJECT_AFFILIATION_PARTY = _G.COMBATLOG_OBJECT_AFFILIATION_PARTY
+local COMBATLOG_OBJECT_AFFILIATION_RAID = _G.COMBATLOG_OBJECT_AFFILIATION_RAID
+local COMBATLOG_OBJECT_CONTROL_PLAYER = _G.COMBATLOG_OBJECT_CONTROL_PLAYER
+local COMBATLOG_OBJECT_REACTION_FRIENDLY = _G.COMBATLOG_OBJECT_REACTION_FRIENDLY
+local COMBATLOG_OBJECT_TYPE_PET = _G.COMBATLOG_OBJECT_TYPE_PET
+local COMBATLOG_OBJECT_TYPE_PLAYER = _G.COMBATLOG_OBJECT_TYPE_PLAYER
+local CreateFrame = _G.CreateFrame
+local geterrorhandler = _G.geterrorhandler
+local GetSpellInfo = _G.GetSpellInfo
+local GetTime = _G.GetTime
+local hooksecurefunc = _G.hooksecurefunc
+local IsInInstance = _G.IsInInstance
+local IsLoggedIn = _G.IsLoggedIn
+local IsResting = _G.IsResting
+local IsSpellKnown = _G.IsSpellKnown
+local next = _G.next
+local pairs = _G.pairs
+local PlaySoundFile = _G.PlaySoundFile
+local select = _G.select
+local setmetatable = _G.setmetatable
+local tremove = _G.tremove
+local type = _G.type
+local UnitCanAssist = _G.UnitCanAssist
+local UnitClass = _G.UnitClass
+local UnitGUID = _G.UnitGUID
+local UnitIsPVP = _G.UnitIsPVP
+local UnitIsUnit = _G.UnitIsUnit
+local wipe = _G.wipe
+--GLOBALS>
 
 local DRData = LibStub('DRData-1.0')
 local SharedMedia = LibStub('LibSharedMedia-3.0')
-local band = bit.band
 
 local CATEGORIES = DRData:GetCategories()
 addon.CATEGORIES = CATEGORIES
@@ -15,106 +56,85 @@ local CL_EVENTS = {
 }
 
 local CLO_AFFILIATION_MINE = COMBATLOG_OBJECT_AFFILIATION_MINE
+local CLO_AFFILIATION_FRIEND = bor(CLO_AFFILIATION_MINE, COMBATLOG_OBJECT_AFFILIATION_PARTY, COMBATLOG_OBJECT_AFFILIATION_RAID)
 local CLO_CONTROL_PLAYER = COMBATLOG_OBJECT_CONTROL_PLAYER
 local CLO_REACTION_FRIENDLY = COMBATLOG_OBJECT_REACTION_FRIENDLY
-local CLO_TYPE_PET_OR_PLAYER = bit.bor(COMBATLOG_OBJECT_TYPE_PET, COMBATLOG_OBJECT_TYPE_PLAYER)
+local CLO_TYPE_PET_OR_PLAYER = bor(COMBATLOG_OBJECT_TYPE_PET, COMBATLOG_OBJECT_TYPE_PLAYER)
 
-local ICONS
-do
-	-- Basic icons
-	ICONS = {
-		taunt = 355, -- Taunt (Warrior)
-		banish = 18647, -- Banish
-		charge = 100, -- Charge
-		cheapshot = 1833, -- Cheap Shot
-		ctrlstun = [[Interface\Icons\Spell_Frost_FrozenCore]],
-		cyclone = 33786, -- Cyclone
-		disarm = 676, -- Disarm
-		disorient = 1776, -- Gouge
-		entrapment = 19184, -- Entrapment
-		fear = 5782, -- Fear
-		horror = 6789, -- Death Coil
-		mc = 605, -- Mind Control
-		rndroot = [[Interface\Icons\Ability_ShockWave]],
-		rndstun = [[Interface\Icons\INV_Mace_02]],
-		ctrlroot = [[Interface\Icons\Spell_Frost_FrostNova]],
-		scatters = 19503, -- Scatter Shot
-		silence =  2139, -- Counterspell
-		sleep = 2637, -- Hibernate	
-		dragonbreath = 31661, -- Dragon`s Breath
-	}
-	-- Update with class specific icons
-	local _, pClass = UnitClass('player')
-	if pClass == "DRUID" then
-		ICONS.taunt = 6795 -- Growl (Druid)
-		ICONS.cheapshot = 9005 -- Pounce
-		ICONS.ctrlroot = 339 -- Entangling Roots
-		ICONS.ctrlstun = 5211 -- Bash
-	elseif pClass == "HUNTER" then
-		ICONS.taunt = 20736 -- Distracting Shot
-		ICONS.disorient = 3355 -- Freezing Trap
-		ICONS.silence = 34490 -- Silencing Shot
-		ICONS.disarm = 53359 -- Chimera Shot - Scorpid
-		ICONS.ctrlstun = 19577 -- Intimidation
-		ICONS.ctrlroot = 4167 -- Web (Spider)
-		ICONS.fear = 1513 -- Scare Beast
-	elseif pClass == "MAGE" then
-		ICONS.disorient = 118 -- Polymorph
-		ICONS.ctrlstun = 44572 -- Deep Freeze
-		ICONS.rndstun = 12355 -- Impact
-		ICONS.ctrlroot = 122 -- Frost Nova
-		ICONS.rndroot = 12494 -- Frostbite
-	elseif pClass == "ROGUE" then
-		ICONS.silence = 1330 -- Garrote	
-		ICONS.disarm = 51722 -- Dismantle
-		ICONS.fear = 2094 -- Blind
-		ICONS.ctrlstun = 408 -- Kidney Shot
-	elseif pClass == "WARRIOR" then
-		ICONS.silence = 18498 -- Gag Order (Warrior talent)	
-		ICONS.fear = 5246 -- Intimidating Shout
-		ICONS.ctrlstun = 12809 -- Concussion Blow
-		ICONS.rndstun = 12798 -- Revenge Stun
-		ICONS.rndroot = 23694 -- Improved Hamstring
-	end
-end
+local ICONS = {}
 addon.ICONS = ICONS
 
 local SPELLS = {}
+local SPELLS_BY_CATEGORY = {}
 for id, category in pairs(DRData:GetSpells()) do
 	if CATEGORIES[category] then
 		SPELLS[id] = category
+		if not SPELLS_BY_CATEGORY[category] then
+			SPELLS_BY_CATEGORY[category] = { id }
+		else
+			tinsert(SPELLS_BY_CATEGORY[category], id)
+		end
+	--[===[@debug@
+	else
+		geterrorhandler()('Spell '..id..' assigned to unknown category '..category)
+	--@end-debug@]===]
 	end
 end
 addon.SPELLS = SPELLS
+addon.SPELLS_BY_CATEGORY = SPELLS_BY_CATEGORY
 
-local spellsResolved = false
-do
-	local function ResolveSpells()
-		addon:UnregisterEvent('PLAYER_LOGIN', ResolveSpells)
-		ResolveSpells = nil
-		for id, category in pairs(SPELLS) do
-			if type(id) == "number" then
-				local name = GetSpellInfo(id)
-				if name then
-					SPELLS[name] = category
-				--[===[@debug@
-				else
-					addon:Debug('Unknown spell', id, 'for', category)
-				--@end-debug@]===]
+-- Search icons on demand
+setmetatable(ICONS, { __index = function(t, category)
+	local icon
+	if addon.db.profile.icons[category] then
+		icon = addon.db.profile.icons[category]
+	elseif SPELLS_BY_CATEGORY[category] then
+		local score = 0
+		for i, id in ipairs(SPELLS_BY_CATEGORY[category]) do
+			local thisIcon = select(3, GetSpellInfo(id))
+			if thisIcon then
+				if score < 30 and IsSpellKnown(id) then
+					-- Character spell
+					icon, score = thisIcon, 30
+				elseif score < 20 and IsSpellKnown(id, true) then
+					-- Pet spell
+					icon, score = thisIcon, 20
+				elseif score < 10 then
+					-- Any spell
+					icon, score = thisIcon, 10
 				end
 			end
 		end
-		for cat, icon in pairs(ICONS) do
-			if type(icon) == "number" then
-				ICONS[cat] = select(3, GetSpellInfo(icon))
+	else
+		icon = [[Interface\\Icons\\INV_Misc_QuestionMark]]
+	end
+	if icon then
+		t[category] = icon
+		return icon
+	end
+	return [[Interface\\Icons\\INV_Misc_QuestionMark]]
+end})
+
+function addon:ResolveSpells()
+	if spellsResolved then return end
+	for id, category in pairs(SPELLS) do
+		if type(id) == "number" then
+			local name = GetSpellInfo(id)
+			if name then
+				SPELLS[name] = category
+				spellsResolved = true
+			--[===[@debug@
+			else
+				geterrorhandler()('Unknown spell '..id..' (category '..category..')')
+			--@end-debug@]===]
 			end
 		end
-		spellsResolved = true
 	end
-	if not IsLoggedIn() then
-		addon:RegisterEvent('PLAYER_LOGIN', ResolveSpells)
-	else
-		ResolveSpells()
+	if spellsResolved then
+		wipe(ICONS)
+		self:Debug('Spells changed')
+		self:CheckActivation('SpellsResolved')
+		return true
 	end
 end
 
@@ -133,20 +153,60 @@ do
 end
 
 local runningDR = {}
-local timerFrame = CreateFrame("Frame")
+local StartTimer, StopTimer
+local PLAYER_GUID = UnitGUID("player")
+
+local function SpawnDR(guid, category, isFriend, increase, duration)
+    if
+        guid == PLAYER_GUID and
+        category ~= 'ctrlstun' and
+        category ~= 'Controlled stuns' and
+        category ~= 'fear' and
+        category ~= 'Fears' and
+        category ~= 'disorient' and
+        category ~= 'Disorients'
+    then
+        return
+    else
+        local targetDR = runningDR[guid]
+        if not targetDR then
+            targetDR = new()
+            runningDR[guid] = targetDR
+        end
+        local dr = targetDR[category]
+        local now = GetTime()
+        if not dr then
+            dr = new()
+            dr.isFriend = isFriend
+            dr.texture = ICONS[category]
+            dr.count = 0
+            targetDR[category] = dr
+        end
+        dr.count = dr.count + increase
+        dr.expireTime = now + duration
+        if dr.count > 0 then
+            assert(type(duration) == "number")
+            addon:SendMessage('UpdateDR', guid, category, isFriend, dr.texture, dr.count, duration, dr.expireTime)
+        end
+        StartTimer()
+	end
+end
 
 local function RemoveDR(guid, cat)
 	local targetDR = runningDR[guid]
 	local dr = targetDR and targetDR[cat]
 	if dr then
 		if dr.count > 0 then
-			addon:TriggerMessage('RemoveDR', guid, cat)
+			addon:SendMessage('RemoveDR', guid, cat)
 		end
 		targetDR[cat] = del(dr)
 		if not next(targetDR) then
 			runningDR[guid] = del(targetDR)
 			if not next(runningDR) then
-				timerFrame:Hide()
+				StopTimer()
+				if addon.testMode then
+					addon:SetTestMode(false)
+				end
 			end
 		end
 	end
@@ -160,49 +220,86 @@ local function RemoveAllDR(guid)
 	end
 end
 
-local function ParseCLEU(self, _, timestamp, event, _, srcName, srcFlags, guid, name, flags, spellId, spell)	
-	-- Always process UNIT_DIED if we have information about the unit
+local function ParseCLEU(self, timestamp, event, sourceGUID, srcName, srcFlags, guid, name, flags, spellId, spell, spellSchool, auraType, ...)
+--local function ParseCLEU(self, _, timestamp, event, _, srcName, srcFlags, guid, name, flags, spellId, spell, ...)
+--    print(self, ' - self')
+--    print(timestamp, ' - timestamp')
+--    print(event, ' - event')
+--    print(sourceGUID, ' - sourceGUID')
+--    print(srcName, ' - srcName')
+--    print(srcFlags, ' -srcFlags')
+--    print(guid, '- guid')
+--    print(name, '- name')
+--    print(spellId, ' - spellId')
+--    print(spell, ' - spell')
 	if event == 'UNIT_DIED' then
 		if runningDR[guid] then
-			RemoveAllDR(guid)
+			--RemoveAllDR(guid)
 		end
 		return
 	end
-	-- Ignore targetted friends
-	if band(flags, CLO_REACTION_FRIENDLY) ~= 0 and not(UnitName("player") == name) and not(UnitName("party1") == name) and not(UnitName("party2") == name) and not(UnitName("party3") == name) and not(UnitName("party4") == name) and not(UnitName("party5") == name) then return end
 	-- Ignore any spell or event we are not interested with
 	local increase, category = CL_EVENTS[event], SPELLS[spellId] or SPELLS[spell]
 	if not increase or not category then return end
-	-- Ignore mobs for non-PvE categories
-	local isPlayer = band(flags, CLO_TYPE_PET_OR_PLAYER) ~= 0 or band(flags, CLO_CONTROL_PLAYER) ~= 0
-	local prefs = addon.db.profile
-	if not isPlayer and (not addon.db.profile.pveMode or not DRData:IsPVE(category)) then return end
-	-- Category auto-learning
-	if prefs.learnCategories and band(srcFlags, CLO_AFFILIATION_MINE) ~= 0 and not prefs.categories[category] then
-		prefs.categories[category] = true
+	-- Detect friends
+	local isFriend = false
+	if band(flags, CLO_REACTION_FRIENDLY) ~= 0 then
+		isFriend = band(flags, CLO_AFFILIATION_FRIEND) ~= 0
+		if not addon.testMode and not isFriend then
+			-- Ignore outsiders
+			return
+		end
 	end
-	-- Now do the job
-	local targetDR = runningDR[guid]
-	if not targetDR then
-		targetDR = new()
-		runningDR[guid] = targetDR
+	if not addon.testMode then
+		-- Ignore mobs for non-PvE categories
+		local isPlayer = band(flags, CLO_TYPE_PET_OR_PLAYER) ~= 0 or band(flags, CLO_CONTROL_PLAYER) ~= 0
+		if not isPlayer and (not addon.db.profile.pveMode or not DRData:IsPVE(category)) then
+			return
+		end
+		-- Category auto-learning
+		if addon.db.profile.learnCategories and band(srcFlags, CLO_AFFILIATION_MINE) ~= 0 then
+			addon.db.profile.categories[category] = true
+		end
 	end
-	local dr = targetDR[category]
-	local now = GetTime()
-	if not dr then
-		dr = new()
-		dr.texture = ICONS[category]
-		dr.count = 0
-		targetDR[category] = dr
+	-- Create or extend the DR
+	return SpawnDR(guid, category, isFriend, increase, addon.db.profile.resetDelay)
+end
+
+local function SpawnTestDR(unit, mysteryFlag)
+	local guid
+	local isFriend = false
+
+	if mysteryFlag then
+		guid = unit
+	else
+		guid = UnitGUID(unit)
+		isFriend = UnitCanAssist("player", unit)
 	end
-	dr.count = dr.count + increase
-	local duration = prefs.resetDelay
-	dr.expireTime = now + duration
-	if dr.count > 0 then
-		assert(type(duration) == "number")
-		self:TriggerMessage('UpdateDR', guid, category, dr.texture, dr.count, duration, dr.expireTime)
+
+	if guid then
+		local count = 1
+		for cat in pairs(addon.CATEGORIES) do
+			SpawnDR(guid, cat, isFriend, 1 + count % 3, 2*count+math.random(1,9))
+			count = count % 3 + 1
+		end
 	end
-	timerFrame:Show()
+end
+
+function addon:SpawnTestDR()
+	SpawnTestDR("player")
+	SpawnTestDR("pet")
+	if not UnitIsUnit("pet", "target") and not UnitIsUnit("player", "target") then
+		SpawnTestDR("target")
+	end
+	if not UnitIsUnit("pet", "focus") and not UnitIsUnit("player", "focus") and not UnitIsUnit("target", "focus") then
+		SpawnTestDR("focus")
+	end
+
+	SpawnTestDR("arena1", true)
+	SpawnTestDR("arena2", true)
+	SpawnTestDR("arena3", true)
+	SpawnTestDR("arena4", true)
+	SpawnTestDR("arena5", true)
 end
 
 local function WipeAll(self)
@@ -213,41 +310,50 @@ local function WipeAll(self)
 	end
 end
 
-local timer = 0
-timerFrame:Hide()
-timerFrame:SetScript('OnShow', function() timer = 0 end)
-timerFrame:SetScript('OnUpdate', function(self, elapsed)
-	if timer > 0 then
-		timer = timer - elapsed
-		return
-	end
-	local now = GetTime()
-	local watched = addon.db.profile.categories
-	local hasReset = false
-	timer = 0.1
-	for guid, drs in pairs(runningDR) do
-		for cat, dr in pairs(drs) do
-			if now >= dr.expireTime then
-				if dr.count > 0 and watched[cat] then
-					hasReset = true
+do
+	local running, Tick
+
+	function Tick()
+		local now = GetTime()
+		local watched = addon.db.profile.categories
+		local playSound = false
+		for guid, drs in pairs(runningDR) do
+			for cat, dr in pairs(drs) do
+				if now >= dr.expireTime then
+					if dr.count > 0 and not dr.isFriend and watched[cat] then
+						playSound = true
+					end
+					RemoveDR(guid, cat)
 				end
-				RemoveDR(guid, cat)
 			end
 		end
+		if playSound and addon.db.profile.soundAtReset then
+			local key = addon.db.profile.resetSound
+			local media = SharedMedia:Fetch('sound', key)
+			addon:Debug('PlaySound', key, media)
+			PlaySoundFile(media, "SFX")
+		end
+		if running then
+			C_Timer:After(0.1, Tick)
+		end
 	end
-	if hasReset and addon.db.profile.soundAtReset then
-		local key = addon.db.profile.resetSound
-		local media = SharedMedia:Fetch('sound', media)
-		addon:Debug('PlaySound', key, media)
-		PlaySound(media)
+
+	function StartTimer()
+		if running then return end
+		running = true
+		Tick()
 	end
-end)
+
+	function StopTimer()
+		running = false
+	end
+end
 
 local function IterFunc(targetDR, cat)
 	local dr
 	cat, dr = next(targetDR, cat)
 	if cat then
-		return cat, dr.texture, dr.count, addon.db.profile.resetDelay, dr.expireTime
+		return cat, dr.isFriend, dr.texture, dr.count, addon.db.profile.resetDelay, dr.expireTime
 	end
 end
 
@@ -261,39 +367,69 @@ function addon:IterateDR(guid)
 	end
 end
 
+local inDuel = false
+
 function addon:CheckActivation(event)
 	local activate = false
 	if spellsResolved then
-		if addon.db.profile.pveMode then
-			activate = not IsResting()
-		else
-			local _, instanceType = IsInInstance()
-			activate = (instanceType ~= "raid" and instanceType ~= "party") and UnitIsPVP('player')
-		end
+		if addon.testMode then
+			self:Debug('CheckActivation: test mode')
+			activate = true
+		elseif addon.db.profile.pveMode then
+            activate = not IsResting()
+        else
+            local _, instanceType = IsInInstance()
+
+            if instanceType ~= "raid" and instanceType ~= "party" then
+                activate = true
+            end
+        end
 	end
 	if activate then
 		if not addon.active then
 			addon:Debug('CheckActivation, pveMode=', addon.db.profile.pveMode, ', activating')
 			addon:RegisterEvent('COMBAT_LOG_EVENT_UNFILTERED', ParseCLEU)
-			addon:RegisterEvent('PLAYER_LEAVING_WORLD', WipeAll)
 			addon.active = true
-			addon:TriggerMessage('EnableDR')
+			addon:SendMessage('EnableDR')
 		end
 	elseif addon.active then
 		addon:Debug('CheckActivation, pveMode=', addon.db.profile.pveMode, ', disactivating')
-		addon:UnregisterEvent('COMBAT_LOG_EVENT_UNFILTERED', ParseCLEU)
-		addon:UnregisterEvent('PLAYER_LEAVING_WORLD', WipeAll)
+		addon:UnregisterEvent('COMBAT_LOG_EVENT_UNFILTERED')
 		WipeAll()
 		addon.active = false
-		addon:TriggerMessage('DisableDR')
+		addon:SendMessage('DisableDR')
 	end
 end
 
+local function BeginDuel()
+	if not inDuel then
+		inDuel = true
+		addon:CheckActivation("BeginDuel")
+	end
+end
+local function EndDuel()
+	if inDuel then
+		inDuel = false
+		addon:CheckActivation("EndDuel")
+	end
+end
+
+hooksecurefunc("AcceptDuel", BeginDuel)
+hooksecurefunc("StartDuel", BeginDuel)
+hooksecurefunc("CancelDuel", EndDuel)
+addon:RegisterEvent('DUEL_FINISHED', EndDuel)
+
 addon:RegisterEvent('PLAYER_ENTERING_WORLD', 'CheckActivation')
+addon:RegisterEvent('PLAYER_LEAVING_WORLD', 'CheckActivation')
 addon:RegisterEvent('PLAYER_UPDATE_RESTING', 'CheckActivation')
-addon:RegisterEvent('UNIT_FACTION', function(self, event, unit)
+addon:RegisterEvent('PLAYER_REGEN_ENABLED', 'CheckActivation')
+addon:RegisterEvent('PLAYER_REGEN_DISABLED', 'CheckActivation')
+addon:RegisterEvent('UNIT_FACTION', function(event, unit)
 	if unit == "player" then return addon:CheckActivation(event) end
 end)
-addon:RegisterEvent('OnConfigChanged', function(self, event, name)
+addon.RegisterMessage('Tracker', 'OnConfigChanged', function(event, name)
 	if name == "pveMode" then return addon:CheckActivation(event) end
+end)
+addon.RegisterMessage('Tracker', 'SetTestMode', function(event, name)
+	return addon:CheckActivation(event)
 end)

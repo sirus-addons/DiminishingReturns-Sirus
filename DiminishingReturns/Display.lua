@@ -1,7 +1,37 @@
-local addon = DiminishingReturns
+--[[
+Diminishing Returns - Attach diminishing return icons to unit frames.
+Copyright 2009-2012 Adirelle (adirelle@gmail.com)
+All rights reserved.
+--]]
+
+local addonName, ns = ...
+
+local addon = _G.DiminishingReturns
 if not addon then return end
 
-local FONT_NAME, FONT_SIZE, FONT_FLAGS = GameFontNormal:GetFont(), 16, "OUTLINE"
+local templateFrame = CreateFrame("Frame")
+templateFrame.Debug = addon.Debug
+
+--<GLOBALS
+local _G = _G
+local ceil = _G.ceil
+local CreateFrame = _G.CreateFrame
+local format = _G.format
+local GetTime = _G.GetTime
+local ipairs = _G.ipairs
+local max = _G.max
+local SecureButton_GetModifiedUnit = _G.SecureButton_GetModifiedUnit
+local select = _G.select
+local strsub = _G.strsub
+local tinsert = _G.tinsert
+local tostring = _G.tostring
+local tremove = _G.tremove
+local UnitGUID = _G.UnitGUID
+local unpack = _G.unpack
+local wipe = _G.wipe
+--GLOBALS>
+
+local FONT_NAME, FONT_SIZE, FONT_FLAGS = _G.GameFontNormal:GetFont(), 16, "OUTLINE"
 
 local ANCHORING = {
 	LEFT   = { "RIGHT",  "LEFT",   -1,  0 },
@@ -16,27 +46,22 @@ local TEXTS = {
 	{         "0", 1.0, 0.0, 0.0 }
 }
 
-local borderBackdrop = {
-	edgeFile = [[Interface\Addons\DiminishingReturns\white16x16]],
-	edgeSize = 1,
-	insets = {left = 1, right = 1, top = 1, bottom = 1},
-}
-
 local function FitTextSize(text, width, height)
 	local name, _, flags = text:GetFont()
 	text:SetFont(name, text.fontSize, flags)
-	local ratio = text:GetStringWidth() / (width-2)
+	local ratio = text:GetStringWidth() / (width-4)
 	if height then
-		ratio = math.max(ratio, text:GetStringHeight() / (height-2))
+		ratio = max(ratio, text:GetStringHeight() / (height-4))
 	end
 	if ratio > 1 then
-		text:SetFont(name, text.fontSize / ratio, flags)
+		text:SetFont(name, floor(text.fontSize / ratio), flags)
 	end
 end
 
-local ceil, GetTime, strformat = math.ceil, GetTime, string.format
+local iconProto = setmetatable({}, { __index = templateFrame })
+local iconMeta = { __index = iconProto }
 
-local function UpdateTimer(self)
+function iconProto:UpdateTimer()
 	local timer = self.timer
 	if not timer.expireTime then return end
 	local timeLeft = timer.expireTime - GetTime()
@@ -44,7 +69,7 @@ local function UpdateTimer(self)
 		timer.expireTimer, timer.timeLeft = nil, nil
 		return timer:Hide()
 	elseif timeLeft < 3 and addon.db.profile.bigTimer then
-		timeLeft = strformat("%.1f", ceil(timeLeft * 10) / 10)
+		timeLeft = format("%.1f", ceil(timeLeft * 10) / 10)
 	else
 		timeLeft = tostring(ceil(timeLeft))
 	end
@@ -55,163 +80,221 @@ local function UpdateTimer(self)
 	end
 end
 
-local function SpawnIcon(self)
-	local icon = CreateFrame("Frame", nil, self)
-	icon:SetWidth(self.iconSize)
-	icon:SetHeight(self.iconSize)
-	
-	local texture = icon:CreateTexture(nil, "ARTWORK")
-	texture:SetAllPoints(icon)
-	icon.texture = texture
+local LBF = LibStub('LibButtonFacade', true)
+if LBF then
+	local group = LBF:Group("DiminishingReturns")
+	addon.DEFAULT_CONFIG.ButtonFacade = { skinID = "Blizzard" }
 
-	local border = CreateFrame("Frame", nil, icon)
-	border:SetPoint("CENTER", icon)
-	border:SetWidth(self.iconSize + 2)
-	border:SetHeight(self.iconSize + 2)
-	icon.border = border
+	LBF:RegisterSkinCallback("DiminishingReturns", function(_, skinID, gloss, backdrop, _, _, colors)
+		local skin = addon.db.profile.ButtonFacade
+		skin.skinID, skin.gloss, skin.backdrop, skin.colors = skinID, gloss, backdrop, colors
+	end, addon)
 
-	local textFrame = CreateFrame("Frame", nil, icon)
-	textFrame:SetAllPoints(icon)
+	addon.RegisterMessage('Display-LBF', 'OnProfileChanged', function()
+		local skin = addon.db.profile.ButtonFacade
+		group:Skin(skin.skinID, skin.gloss, skin.backdrop, skin.colors)
+	end)
 
-	if not self.noCooldown then
-		local cooldown = CreateFrame("Cooldown", nil, icon)
-		cooldown:SetAllPoints(icon)
-		cooldown:SetDrawEdge(true)
-		cooldown.noCooldownCount = true
-		icon.cooldown = cooldown
-		
-		textFrame:SetFrameLevel(cooldown:GetFrameLevel()+3)
+	function iconProto:Skin()
+		-- Extract existing data
+		local data = {
+			Icon = self.texture,
+			Cooldown = self.cooldown,
+			Border = self.border,
+			Count = self.smallText,
+		}
+
+		-- Create a bunch of texture to skin
+		data.Backdrop = self:CreateTexture(nil, "BACKGROUND")
+		data.Backdrop:SetAllPoints(self)
+		data.Normal = self:CreateTexture(nil, "ARTWORK")
+		data.Normal:SetAllPoints(self)
+		self.SetNormalTexture = function(_, ...) return data.Normal:SetTexture(...) end
+
+		-- Register the icon
+		group:AddButton(self, data)
 	end
-	
+
+else
+	 -- NOOP
+	function iconProto:Skin() end
+end
+
+function iconProto:Update(texture, count, duration, expireTime)
+	local txt, r, g, b = tostring(count), 1, 1, 1
+	if TEXTS[count] then
+		txt, r, g, b = unpack(TEXTS[count])
+	end
+	self.texture:SetTexture(texture)
+	if self.cooldown then
+		self.cooldown:SetCooldown(expireTime-duration, duration)
+	end
+	self.bigText:SetTextColor(r, g, b)
+	self.border:SetVertexColor(r, g, b, 0)
+
+	local timer
+	if addon.db.profile.bigTimer or addon.db.profile.immunityOnly then
+		timer = self.bigText
+		self.smallText:Hide()
+	else
+		timer = self.smallText
+		local text = self.bigText
+		text:SetText(txt)
+		FitTextSize(text, self:GetWidth())
+		text:Show()
+	end
+
+	self.timer, timer.expireTime, timer.timeLeft = timer, expireTime
+	timer:Show()
+	self:UpdateTimer()
+end
+
+function iconProto:SetAnchor(to, direction, spacing)
+	self:ClearAllPoints()
+	local anchor, relPoint, xOffset, yOffset = unpack(ANCHORING[direction])
+	if to then
+		self:SetPoint(anchor, to, relPoint, spacing * xOffset, spacing * yOffset)
+	else
+		self:SetPoint(anchor)
+	end
+end
+
+function iconProto:Initialize(iconSize, noCooldown)
+	self:SetSize(iconSize, iconSize)
+
+	local texture = self:CreateTexture(nil, "ARTWORK")
+	texture:SetAllPoints(self)
+	--texture:SetTexCoord(4/64, 60/64, 4/64, 60/64)
+	--texture:SetTexture(1,1,1,1)
+	self.texture = texture
+
+	local border = self:CreateTexture(nil, "OVERLAY")
+	border:SetAllPoints(self)
+	border:SetTexture([[Interface\AddOns\DiminishingReturns\icon_border]])
+	self.border = border
+
+	local textFrame = CreateFrame("Frame", nil, self)
+	textFrame:SetAllPoints(self)
+
+	if not noCooldown then
+		local cooldown = CreateFrame("Cooldown", nil, self)
+		cooldown:SetAllPoints(self)
+		cooldown.noCooldownCount = true
+		self.cooldown = cooldown
+
+		textFrame:SetFrameLevel(cooldown:GetFrameLevel()+2)
+	end
+
 	local bigText = textFrame:CreateFontString(nil, "OVERLAY")
 	bigText.fontSize = FONT_SIZE
 	bigText:SetFont(FONT_NAME, bigText.fontSize, FONT_FLAGS)
 	bigText:SetTextColor(1, 1, 1, 1)
-	bigText:SetAllPoints(icon)
+	bigText:SetAllPoints(self)
 	bigText:SetJustifyH("CENTER")
 	bigText:SetJustifyV("MIDDLE")
-	icon.bigText = bigText
+	self.bigText = bigText
 
 	local smallText = textFrame:CreateFontString(nil, "OVERLAY")
 	smallText.fontSize = 10
 	smallText:SetFont(FONT_NAME, smallText.fontSize, FONT_FLAGS)
 	smallText:SetTextColor(1, 1, 1, 1)
-	smallText:SetAllPoints(icon)
+	smallText:SetAllPoints(self)
 	smallText:SetJustifyH("CENTER")
 	smallText:SetJustifyV("BOTTOM")
-	icon.smallText = smallText
+	self.smallText = smallText
 
-	icon:SetScript('OnUpdate', UpdateTimer)
+	self:SetScript('OnUpdate', self.UpdateTimer)
 
+	self:Skin()
+end
+
+local frameProto = setmetatable({}, { __index = templateFrame })
+local frameMeta = { __index = frameProto }
+
+addon:EmbedEventDispatcher(frameProto)
+
+function frameProto:GetIcon()
+	local icon = next(self.iconHeap)
+	if not icon then
+		icon = setmetatable(CreateFrame("Frame", nil, self), iconMeta)
+		icon:Initialize(self.iconSize, self.noCooldown)
+		icon.Release = function()
+			self.iconHeap[icon] = true
+			icon:Hide()
+		end
+	else
+		self.iconHeap[icon] = nil
+	end
 	return icon
 end
 
-local function SetAnchor(icon, to, direction, spacing)
-	icon:ClearAllPoints()
-	local anchor, relPoint, xOffset, yOffset = unpack(ANCHORING[direction])
-	if to then
-		icon:SetPoint(anchor, to, relPoint, spacing * xOffset, spacing * yOffset)
-	else
-		icon:SetPoint(anchor)
-	end
-end
-
-local function UpdateFrameSize(self)
+function frameProto:UpdateSize()
 	local iconSize, spacing = self.iconSize, self.spacing
-	local barSize = iconSize + math.max((iconSize + spacing) * (#(self.activeIcons) - 1), 0)
+	local barSize = iconSize + max((iconSize + spacing) * (#(self.activeIcons) - 1), 0)
 	if ANCHORING[self.direction][3] ~= 0 then
-		self:SetWidth(barSize)
-		self:SetHeight(iconSize)
+		self:SetSize(barSize, iconSize)
 	else
-		self:SetWidth(iconSize)
-		self:SetHeight(barSize)
+		self:SetSize(iconSize, barSize)
 	end
 end
 
-local function RemoveDR(self, event, guid, cat)
+function frameProto:RemoveDR(event, guid, cat)
 	if guid ~= self.guid then return end
 	local activeIcons = self.activeIcons
 	local index
 	for i, icon in ipairs(activeIcons) do
 		if icon.category == cat then
 			tremove(activeIcons, i)
-			self.iconHeap[icon] = true
-			icon:Hide()
-			UpdateFrameSize(self)
+			icon:Release()
+			self:UpdateSize()
 			index = i
 			break
 		end
 	end
 	if not index or not activeIcons[index] then return end
-	SetAnchor(activeIcons[index], activeIcons[index-1], self.direction, self.spacing)
+	activeIcons[index]:SetAnchor(activeIcons[index-1], self.direction, self.spacing)
 end
 
-local function UpdateIcon(icon, texture, count, duration, expireTime)
-	local txt, r, g, b = tostring(count), 1, 1, 1
-	if TEXTS[count] then
-		txt, r, g, b = unpack(TEXTS[count])
-	end
-	icon.texture:SetTexture(texture)
-	if icon.cooldown then
-		icon.cooldown:SetCooldown(expireTime-duration, duration)
-	end
-	icon.bigText:SetTextColor(r, g, b)
-	icon.border:SetBackdropBorderColor(r, g, b, 0)
+function frameProto:UpdateDR(event, guid, cat, isFriend, texture, count, duration, expireTime)
+	if not addon.db.profile.categories[cat] then return end
 
-	local timer
-	if addon.db.profile.bigTimer then
-		timer = icon.bigText
-		icon.smallText:Hide()
-	else
-		timer = icon.smallText
-		local text = icon.bigText
-		text:SetText(txt)
-		FitTextSize(text, icon:GetWidth())
-		text:Show()
-	end
-
-	icon.timer, timer.expireTime, timer.timeLeft = timer, expireTime
-	timer:Show()
-	UpdateTimer(icon)
-end
-
-local function UpdateDR(self, event, guid, cat, texture, count, duration, expireTime)
-	if guid ~= self.guid or not addon.db.profile.categories[cat] then
+	if (guid ~= self.guid or (isFriend and not addon.db.profile.friendly)) and not addon.testMode then
 		return
+	end
+
+	if count == 0 or (count < 3 and addon.db.profile.immunityOnly) then
+		self:RemoveDR(event, guid, cat)
+		return true
 	end
 	local activeIcons = self.activeIcons
 	for i, icon in ipairs(activeIcons) do
 		if icon.category == cat then
-			return UpdateIcon(icon, texture, count, duration, expireTime)
+			icon:Update(texture, count, duration, expireTime)
+			return true
 		end
 	end
 	local previous = #activeIcons
-	icon = tremove(self.iconHeap) or SpawnIcon(self)
+	local icon = self:GetIcon()
 	icon.category = cat
 	tinsert(activeIcons, icon)
-	SetAnchor(icon, activeIcons[previous], self.direction, self.spacing)
+	icon:SetAnchor(activeIcons[previous], self.direction, self.spacing)
 	icon:Show()
-	UpdateIcon(icon, texture, count, duration, expireTime)
-	UpdateFrameSize(self)
+	icon:Update(texture, count, duration, expireTime)
+	self:UpdateSize()
+	return true
 end
 
-local function RefreshAllIcons(self)
+function frameProto:RefreshAllIcons()
 	local activeIcons = self.activeIcons
 	for i, icon in ipairs(activeIcons) do
-		icon:Hide()
-		self.iconHeap[icon] = true
+		icon:Release()
 	end
 	wipe(activeIcons)
-	if self.testMode then
-		local count = 1
-		for cat in pairs(addon.CATEGORIES) do
-			UpdateDR(self, "ToggleTestMode", self.guid, cat, addon.ICONS[cat], count, 15, GetTime()-2*count+15)
-			count = (count == 3) and 1 or (count+1)
-		end
-	elseif self.guid then
+	if self.guid or addon.testMode then
 		local guid = self.guid
-		for cat, texture, count, duration, expireTime in addon:IterateDR(guid) do
-			UpdateDR(self, "UpdateGUID", guid, cat, texture, count, duration, expireTime)
+
+		for cat, isFriend, texture, count, duration, expireTime in addon:IterateDR(guid) do
+			self:UpdateDR("UpdateGUID", guid, cat, isFriend, texture, count, duration, expireTime)
 		end
 	else
 		return self:Hide()
@@ -219,35 +302,46 @@ local function RefreshAllIcons(self)
 	return self:Show()
 end
 
-local function UpdateGUID(self)
+function frameProto:UpdateGUID()
 	local guid = self:GetGUID()
 	if guid == self.guid then return end
 	self.guid = guid
-	RefreshAllIcons(self)
+	self:RefreshAllIcons()
+	return true
 end
 
-local function UpdateStatus(self)
-	local enabled = (addon.active or self.testMode) and self:GetDatabase().enabled
+function frameProto:UpdateStatus()
+	local enabled = (addon.active or self.testMode) and self.anchor:IsVisible() and self:GetDatabase().enabled
 	if enabled then
-		if self.enabled then
-			RefreshAllIcons(self)
-		else
+		if not self.enabled then
 			self.enabled = true
+			self:RegisterMessage('UpdateDR')
+			self:RegisterMessage('RemoveDR')
 			self:OnEnable()
 		end
+
+		if not self:UpdateGUID() then
+			self:RefreshAllIcons()
+		end
 	elseif self.enabled then
-		self.guid, self.enabled = nil, nil, false
+		self.guid, self.enabled = nil, false
+		self:UnregisterMessage('UpdateDR')
+		self:UnregisterMessage('RemoveDR')
 		self:OnDisable()
 		self:Hide()
 	end
 end
 
-local function SetTestMode(self, event, value)
+function frameProto:OnEnable() end
+function frameProto:OnDisable() end
+function frameProto:GetGUID() end
+
+function frameProto:SetTestMode(event, value)
 	self.testMode = value
-	UpdateStatus(self)
+	self:UpdateStatus()
 end
 
-local function OnFrameConfigChanged(self, event, key)
+function frameProto:OnFrameConfigChanged(event, key)
 	local db = self:GetDatabase()
 	local anchorPoint, iconSize, direction, spacing = db.anchorPoint, db.iconSize, db.direction, db.spacing
 	self:ClearAllPoints()
@@ -259,86 +353,81 @@ local function OnFrameConfigChanged(self, event, key)
 		self.spacing = spacing
 		local activeIcons = self.activeIcons
 		for i, icon in ipairs(activeIcons) do
-			icon:SetWidth(iconSize)
-			icon:SetHeight(iconSize)
+			icon:SetSize(iconSize, iconSize)
 		end
-		RefreshAllIcons(self)
 	end
-	UpdateStatus(self)
+	self:UpdateStatus()
 end
 
-local AdiEvent = LibStub('LibAdiEvent-1.0')
+function frameProto:Initialize(anchor)
+	self:Hide()
+
+	self.activeIcons = {}
+	self.iconHeap = {}
+
+	self.anchor = anchor
+	self:SetSize(1, 1)
+
+	local anchorWatch = function() return self:UpdateStatus() end
+	anchor:HookScript('OnShow', anchorWatch)
+	anchor:HookScript('OnHide', anchorWatch)
+
+	self:RegisterMessage('EnableDR', 'UpdateStatus')
+	self:RegisterMessage('DisableDR', 'UpdateStatus')
+	self:RegisterMessage('SetTestMode')
+	self:RegisterMessage('OnConfigChanged', 'UpdateStatus')
+	self:RegisterMessage('OnFrameConfigChanged')
+	self:RegisterMessage('OnProfileChanged', 'OnFrameConfigChanged')
+
+	self:OnFrameConfigChanged('Initialize')
+end
 
 function addon:SpawnGenericFrame(anchor, GetDatabase, GetGUID, OnEnable, OnDisable, ...)
 	addon:Debug('Attaching to frame', anchor:GetName())
-	local frame = CreateFrame("Frame", nil, anchor)
-	frame:Hide()
-	
-	frame.activeIcons = {}
-	frame.iconHeap = {}
+
+	local frame = setmetatable(CreateFrame("Frame", anchor:GetName().."DR", anchor), frameMeta)
 
 	frame.GetDatabase = GetDatabase
 	frame.GetGUID = GetGUID
-	frame.UpdateGUID = UpdateGUID
 	frame.OnEnable = OnEnable
 	frame.OnDisable = OnDisable
 
-	frame.anchor = anchor
-	frame:SetWidth(1)
-	frame:SetHeight(1)
-
-	AdiEvent.Embed(frame)
-	frame:SetMessageChannel(addon)
-
-	frame:RegisterEvent('UpdateDR', UpdateDR)
-	frame:RegisterEvent('RemoveDR', RemoveDR)
-	frame:RegisterEvent('EnableDR', UpdateStatus)
-	frame:RegisterEvent('DisableDR', UpdateStatus)
-	frame:RegisterEvent('SetTestMode', SetTestMode)
-	frame:RegisterEvent('OnConfigChanged', UpdateStatus)
-	frame:RegisterEvent('OnFrameConfigChanged', OnFrameConfigChanged)
-	frame:RegisterEvent('OnProfileChanged', OnFrameConfigChanged)
-
-	-- Allow to setup arbitrary values
+	-- Setup arbitrary values
 	for i = 1, select('#', ...), 2 do
 		local k, v = select(i, ...)
 		frame[k] = v
 	end
 
-	OnFrameConfigChanged(frame)
+	frame:Initialize(anchor)
 
 	return frame
 end
 
 -- SecureUnitButtonTemplate specific handling
 
-local guidCheckEvents = {
-	PLAYER_TARGET_CHANGED = '^target$',
-	PLAYER_FOCUS_CHANGED = '^focus$',
-	PLAYER_SELF_CHANGED = '^player$',
-	ARENA_OPPONENT_UPDATE = '^arena',
-	PARTY_MEMBERS_CHANGED = '^party1$',
-	RAID_ROSTER_UPDATE = '^raid',
-}
-
 local function OnSecureEnable(self)
 	local unit = self:GetUnit()
-	for event, pattern in pairs(guidCheckEvents) do
-		if unit:match(pattern) then
-			self:RegisterEvent(event, 'UpdateGUID')
-		end
+	if unit == "target" then
+		self:RegisterEvent('PLAYER_TARGET_CHANGED', 'UpdateGUID')
+	elseif unit == "focus" then
+		self:RegisterEvent('PLAYER_FOCUS_CHANGED', 'UpdateGUID')
+	elseif strsub(unit, 1, 5) == "arena" then
+		self:RegisterEvent('ARENA_OPPONENT_UPDATE', 'UpdateGUID')
+	elseif strsub(unit, 1, 5) == "party" or strsub(unit, 1, 4) == "raid" then
+		self:RegisterEvent('GROUP_ROSTER_UPDATE', 'UpdateGUID')
 	end
-	self:UpdateGUID()
 end
 
 local function OnSecureDisable(self)
-	for event in pairs(guidCheckEvents) do
-		self:UnregisterEvent(event, 'UpdateGUID')
-	end
+	self:UnregisterEvent('PLAYER_TARGET_CHANGED')
+	self:UnregisterEvent('PLAYER_FOCUS_CHANGED')
+	self:UnregisterEvent('ARENA_OPPONENT_UPDATE')
+	self:UnregisterEvent('GROUP_ROSTER_UPDATE')
 end
 
 local function GetSecureGUID(self)
-	return UnitGUID(self:GetUnit())
+	local unit = self:GetUnit()
+	return UnitGUID(self:GetUnit()) or unit
 end
 
 function addon:SpawnFrame(anchor, secure, GetDatabase)
@@ -349,6 +438,7 @@ function addon:SpawnFrame(anchor, secure, GetDatabase)
 		if name == "unit" and addon.active and frame.enabled then
 			frame:OnDisable()
 			frame:OnEnable()
+			frame:UpdateGUID()
 		end
 	end)
 	return frame

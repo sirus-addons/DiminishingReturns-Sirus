@@ -150,10 +150,7 @@ Data.spells = {
 	[1330] = "silence",
 
     -- Arcane Torrent
-    [375001 ] = "silence",
-
-    -- Arcane Torrent
-    [316420] = "silence",
+    [375001] = "silence",
 	
 	-- Silence
 	[15487] = "silence",
@@ -306,8 +303,8 @@ Data.spells = {
     [30283] = "ctrlstun",
     [30413] = "ctrlstun",
     [30414] = "ctrlstun",
-	[47846] = "ctrlstun",
-    [47847] = "ctrlstun",
+    [47846] = "ctrlstun",
+	[47847] = "ctrlstun",
 
     -- Holy Wrath
     [2812] = "ctrlstun",

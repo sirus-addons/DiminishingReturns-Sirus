@@ -38,4 +38,3 @@ addon:RegisterAddonSupport('Gladius', function()
 	end
 	
 end)
-

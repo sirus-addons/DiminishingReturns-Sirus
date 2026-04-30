@@ -1,36 +1,41 @@
-local addon = DiminishingReturns
+--[[
+Diminishing Returns - Attach diminishing return icons to unit frames.
+Copyright 2009-2012 Adirelle (adirelle@gmail.com)
+All rights reserved.
+--]]
+
+local addon = _G.DiminishingReturns
 if not addon then return end
 
 addon:RegisterAddonSupport('ag_UnitFrames', function()
-
-	local defaults = {
-		enabled = true,
-		iconSize = 24,
-		direction = 'RIGHT',
-		spacing = 2,
-		anchorPoint = 'TOPLEFT',
-		relPoint = 'BOTTOMLEFT',
-		xOffset = 0,
-		yOffset = -4,
-	}
+	--<GLOBALS
+	local _G = _G
+	local GetAddOnMetadata = _G.GetAddOnMetadata
+	local gsub = _G.gsub
+	--GLOBALS>
 
 	local db = addon.db:RegisterNamespace('ag_UnitFrames', {profile={
-		target = defaults,
-		focus = defaults,
-		player = defaults
+		['*'] = {
+			enabled = true,
+			iconSize = 24,
+			direction = 'RIGHT',
+			spacing = 2,
+			anchorPoint = 'TOPLEFT',
+			relPoint = 'BOTTOMLEFT',
+			xOffset = 0,
+			yOffset = -4,
+		}
 	}})
-	
-	local function RegisterFrame(unit)
-		local function GetDatabase() return db.profile[unit], db end
-		addon:RegisterFrameConfig('aUF: '..addon.L[unit], GetDatabase)
+
+	addon:RegisterCommonFrames(function(unit)
+		local refUnit = gsub(unit, "%d+$", "")
+		local function GetDatabase() return db.profile[refUnit], db end
+		addon:RegisterFrameConfig('aUF: '..addon.L[refUnit], GetDatabase)
 		addon:RegisterFrame('aUF'..unit, function(frame)
 			return addon:SpawnFrame(frame, frame, GetDatabase)
 		end)
-	end
+	end)
 
-	RegisterFrame('target')
-	RegisterFrame('focus')
-	RegisterFrame('player')
-	
+	return 'unknown', GetAddOnMetadata('ag_UnitFrames', 'Version')
 end)
 
