@@ -2,4 +2,4 @@ name: DiminishingReturns
 description: README.md
 version: 6
 category: 5
-directories: ["DiminishingReturns"]
+directories: ["DiminishingReturns", "DiminishingReturns_Config"]
